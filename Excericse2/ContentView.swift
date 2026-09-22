@@ -19,6 +19,9 @@ struct ContentView: View {
     @State private var showProgressView = false
     @State private var showLoginError = false
     @State private var showLoginSucc = false
+    @State private var loginErrorMessage = ""
+    
+    private let networkManager = NetworkManager()
     
     var body: some View {
         // In portrait mode the keyboard takes up a large amount of space when clicking on a textfield
@@ -112,7 +115,7 @@ struct ContentView: View {
                 showLoginError = false
             }
         } message:{
-            Text("Credentials are wrong")
+            Text(loginErrorMessage)
         }
         .alert("Login success", isPresented: $showLoginSucc){
             Button("Ok", role: .confirm){
@@ -131,18 +134,24 @@ struct ContentView: View {
         }
         
         showProgressView = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-        // This code executes after 2 seconds
-        // Check here if the login was successful
-            guard email == "test@test.com" && password == "test" else {
+        networkManager.login(email: email, password: password){
+            user, error in
+            if let error = error {
+                loginErrorMessage = error.localizedDescription
                 showLoginError = true
                 showProgressView = false
                 return
             }
-            showLoginSucc = true
-            showProgressView = false
             
+            if user != nil {
+                showProgressView = false
+                showLoginSucc = true
+            }
         }
+        // This code executes after 2 seconds
+        // Check here if the login was successful
+            
+        
     }
 }
 
