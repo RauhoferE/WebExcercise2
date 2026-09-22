@@ -17,6 +17,8 @@ enum NetworkError: Error, LocalizedError{
     case invalidURL
     case noData
     case serializationFailed
+    case unauth
+    case denied
     case serverError(statusCode: Int)
     
     var errorDescription: String?
@@ -38,6 +40,10 @@ enum NetworkError: Error, LocalizedError{
             return "No data"
         case .serializationFailed:
             return "Serialization failed"
+        case .unauth:
+            return "Id Token invalid"
+        case .denied:
+            return "Access denied"
         case .serverError(statusCode: let statusCode):
             return "Server error with status code: \(statusCode)"
         }
@@ -46,10 +52,80 @@ enum NetworkError: Error, LocalizedError{
 
 class NetworkManager {
     private let session: URLSession
-    private let APIKEY: String = "REPLACE_IN_PROD"
+    private let APIKEY: String = ""
     
     init(session: URLSession = .shared){
         self.session = session
+    }
+    
+    func getCountries(idToken: String, completion: @escaping ([Country]?, NetworkError?) -> Void){
+        guard let url = URL(string: "https://firestore.googleapis.com/v1/projects/mad-fe/databases/(default)/documents/countries?pageSize=1000&orderBy=name") else {
+            
+            completion(nil, .invalidURL)
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+
+        
+        let task: URLSessionDataTask = session.dataTask(with: request) { (data, response, error) in
+            
+            if let error = error as NSError?{
+                DispatchQueue.main.async {
+                    completion(nil, .networkOffline)
+                }
+                
+                return
+            }
+            
+            guard let data = data else {
+                DispatchQueue.main.async {
+                    completion(nil, .noData)
+                }
+                
+                return
+            }
+            
+            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode){
+                if let apiError = try? JSONDecoder().decode(CountriesAPIError.self, from: data){
+                    let mappedError = self.mapCountriesAPIError(apiError.status, statusCode: apiError.code)
+                    DispatchQueue.main.async {
+                        completion(nil, mappedError)
+                    }
+                    
+                    
+                }else{
+                    DispatchQueue.main.async {
+                        completion(nil, .serverError(statusCode: httpResponse.statusCode))
+                    }
+
+                }
+
+                return
+            }
+            
+
+            
+            do{
+                
+                let docRes = try JSONDecoder().decode(DocumentsContainer.self, from: data)
+                
+            DispatchQueue.main.async {
+                completion(docRes.documents, nil)
+                }
+            }catch {
+                DispatchQueue.main.async {
+                    completion(nil, .unexpectedDataFormat)
+                }
+                
+            }
+            
+            
+        }
+        task.resume()
     }
     
     func login(email: String, password: String, completion: @escaping (User?, NetworkError?) -> Void){
@@ -142,6 +218,17 @@ class NetworkManager {
             return .invalidEmailFormat
         case "INVALID_LOGIN_CREDENTIALS":
             return .incorrectPassword
+        default:
+            return .serverError(statusCode: statusCode)
+        }
+    }
+    
+    private func mapCountriesAPIError(_ status: String, statusCode: Int) -> NetworkError {
+        switch status {
+        case "PERMISSION_DENIED":
+            return .denied
+        case "UNAUTHENTICATED":
+            return .unauth
         default:
             return .serverError(statusCode: statusCode)
         }
