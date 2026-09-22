@@ -19,6 +19,10 @@ nonisolated struct User: Decodable{
 }
 
 nonisolated struct ResponseError: Decodable{
+    let error: TopError
+}
+
+struct TopError: Decodable{
     let code: Int
     let message: String
     struct Error: Decodable{

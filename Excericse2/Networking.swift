@@ -10,7 +10,6 @@ import Foundation
 
 enum NetworkError: Error, LocalizedError{
     case invalidEmailFormat
-    case emailNotFound
     case incorrectPassword
     case networkOffline
     case unexpectedDataFormat
@@ -25,10 +24,8 @@ enum NetworkError: Error, LocalizedError{
         switch self {
         case .invalidEmailFormat:
             return "Invalid email format"
-        case .emailNotFound:
-            return "Email not found"
         case .incorrectPassword:
-            return "Incorrect password"
+            return "Incorrect password or Email"
         case .networkOffline:
             return "Network is offline"
         case .unexpectedDataFormat:
@@ -49,7 +46,7 @@ enum NetworkError: Error, LocalizedError{
 
 class NetworkManager {
     private let session: URLSession
-    private let APIKEY: String = ""
+    private let APIKEY: String = "REPLACE_IN_PROD"
     
     init(session: URLSession = .shared){
         self.session = session
@@ -101,7 +98,7 @@ class NetworkManager {
             
             if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode){
                 if let apiError = try? JSONDecoder().decode(ResponseError.self, from: data){
-                    let mappedError = self.mapAPIError(apiError.message, statusCode: apiError.code)
+                    let mappedError = self.mapAPIError(apiError.error.message, statusCode: apiError.error.code)
                     DispatchQueue.main.async {
                         completion(nil, mappedError)
                     }
@@ -143,9 +140,7 @@ class NetworkManager {
         switch message {
         case "INVALID_EMAIL":
             return .invalidEmailFormat
-        case "EMAIL_NOT_FOUND":
-            return .emailNotFound
-        case "INVALID_PASSWORD":
+        case "INVALID_LOGIN_CREDENTIALS":
             return .incorrectPassword
         default:
             return .serverError(statusCode: statusCode)
